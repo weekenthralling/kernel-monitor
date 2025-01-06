@@ -117,8 +117,9 @@ def listen_kernel_creation(host="127.0.0.1", port=65432) -> str:
                     if not buffer:
                         break  # End communication if no data is received
                     data += buffer
-            # Decrypt and return the connection_info
-            return decrypt(data.encode("utf-8"), private_key)
+            if len(data) > 0:
+                # Decrypt and return the connection_info
+                return decrypt(data.encode("utf-8"), private_key)
     except KeyboardInterrupt:
         logging.error("\nServer is shutting down...")
     finally:
@@ -188,7 +189,7 @@ class KernelMonitor:
             with self.lock:
                 idle_time = current_time - self.last_activity_timestamp
             if idle_time > self.idle_timeout:
-                labels = {"jupyter.org/kernelmanager-idle": "true"}
+                labels = {"jupyter.org/kernel-idle": "true"}
                 try:
                     update_cr_resource(
                         namespace=self.namespace, cr_name=self.cr_name, labels=labels
@@ -232,12 +233,13 @@ if __name__ == "__main__":
 
     private_key = args.private_key
     connection_info = listen_kernel_creation()
+    logger.info("Connection info received: %s", connection_info)
 
     connection_info = json.loads(connection_info)
     connection_info = connection_info | {"ip": real_IP}
     # Update kernel annotation set connection to this instance
     update_cr_resource(
-        namespace, name, annotations={"jupyter.org/kernel-connection": connection_info}
+        namespace, name, annotations={"jupyter.org/kernel-connection": json.dumps(connection_info)}
     )
 
     monitor = KernelMonitor(
